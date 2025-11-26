@@ -25,11 +25,12 @@
         const server = document.getElementById('server').value.trim();
         if(!server){ alert('填入 WebSocket 地址'); return; }
         ws = new WebSocket(server);
-        ws.onopen = ()=> { log('Connected'); ws.send(JSON.stringify({ type:'info', msg:'controller connected' })); };
+        ws.onopen = ()=> { 
+            log('Connected'); ws.send(JSON.stringify({ type:'info', msg:'controller connected' })); 
+            document.getElementById('controls').style.display='block';};
         ws.onmessage = (ev)=> { console.log('recv', ev.data); };
         ws.onclose = ()=> { log('Disconnected'); document.getElementById('controls').style.display='none'; };
         ws.onerror = (e)=> { console.error(e); log('Error'); };
-        ws.onopen = ()=> document.getElementById('controls').style.display='block';
     });
 
     function send(obj){ if(ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj)); }
