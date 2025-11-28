@@ -1,57 +1,202 @@
 <!doctype html>
 <html>
-<head><meta charset="utf-8"><title>Controller (local test)</title></head>
+<head>
+<meta charset="utf-8">
+<title>Controller</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+
+<style>
+body {
+    margin: 0;
+    background: #222;
+    color: #fff;
+    font-family: sans-serif;
+    touch-action: none;
+}
+
+/* 顶部状态栏 */
+#top {
+    padding: 10px;
+}
+
+/* Action 按钮 */
+#actionBtn {
+    position: fixed;
+    right: 20px;
+    bottom: 120px;
+    width: 90px;
+    height: 90px;
+    border-radius: 50%;
+    background: #ff9f43;
+    border: none;
+    font-size: 20px;
+    color: #000;
+    box-shadow: 0 0 20px rgba(255,159,67,0.8);
+}
+
+/* 摇杆外圈 */
+#joystick-base {
+    position: fixed;
+    left: 20px;
+    bottom: 20px;
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.12);
+    backdrop-filter: blur(6px);
+    border: 3px solid rgba(255,255,255,0.3);
+}
+
+/* 摇杆小球 */
+#joystick-stick {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 70px;
+    height: 70px;
+    margin-left: -35px;
+    margin-top: -35px;
+    border-radius: 50%;
+    background: #00d2ff;
+    box-shadow: 0 0 25px rgba(0,210,255,0.8);
+}
+</style>
+</head>
 <body>
-<h3>本机测试控制面板</h3>
 <div>
-    Server: <input id="server" value="wss://unity-websocket.onrender.com/ws" style="width:260px"/><br/>
-    <button id="connect">Connect</button>
-    <span id="st">Disconnected</span>
+    Client ID:
+    <input id="clientId" placeholder="例如：test01" />
+</div>
+<div id="top">
+    <input id="server" style="width:260px" value="wss://unity-websocket.onrender.com/ws">
+    <button id="connect">连接</button>
+    <span id="st">未连接</span>
 </div>
 
-<div id="controls" style="margin-top:12px; display:none;">
-    <button id="up">↑</button><br/>
-    <button id="left">←</button>
-    <button id="action">Action</button>
-    <button id="right">→</button><br/>
-    <button id="down">↓</button>
+<!-- 摇杆 -->
+<div id="joystick-base">
+    <div id="joystick-stick"></div>
 </div>
+
+<!-- Action -->
+<button id="actionBtn">Action</button>
 
 <script>
-    let ws = null;
-    let heartbeat = null;
-    function log(s){ console.log(s); document.getElementById('st').innerText = s; }
+let ws = null;
+let heartbeat = null;
+let sendTimer = null;
+let dirX = 0, dirY = 0, speed = 0;
 
-    document.getElementById('connect').addEventListener('click', ()=>{
-        const server = document.getElementById('server').value.trim();
-        if(!server){ alert('填入 WebSocket 地址'); return; }
-        ws = new WebSocket(server);
-        ws.onopen = ()=> { 
-            log('Connected'); ws.send(JSON.stringify({ type:'info', msg:'controller connected' })); 
-            document.getElementById('controls').style.display='block';};
-        ws.onmessage = (ev)=> { console.log('recv', ev.data); };
-        ws.onerror = (e)=> { console.error(e); log('Error'); };
-        heartbeat = setInterval(()=>{
-            if(ws.readyState === WebSocket.OPEN){
-                ws.send(JSON.stringify({ type:'ping' }));
-            }
-        }, 15000);
-        ws.onclose = ()=> { log('Disconnected');
-            document.getElementById('controls').style.display='none';         
-            clearInterval(heartbeat);};
-    });
+function log(s){
+    console.log(s);
+    document.getElementById("st").innerText = s;
+}
 
-    function send(obj){ if(ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj)); }
+// -----------------------------------------------
+// 连接按钮
+// -----------------------------------------------
+document.getElementById("connect").onclick = () => {
+    const server = document.getElementById("server").value.trim();
+    const clientId = document.getElementById("clientId").value.trim();
+    if(!server){ alert("请输入服务器地址"); return; }
+    if(!clientId){ alert("请输入unity端 ID"); return; }
 
-    ['up','down','left','right'].forEach(id=>{
-        const el = document.getElementById(id);
-        el.addEventListener('mousedown', ()=> send({ type:'move', dir:{ x: id==='left'? -1: id==='right'?1:0, y: id==='up'?1: id==='down'?-1:0 }, speed:1 }));
-        el.addEventListener('mouseup', ()=> send({ type:'move', dir:{ x:0, y:0 }, speed:0 }));
-        // touch 支持
-        el.addEventListener('touchstart', (e)=>{ e.preventDefault(); send({ type:'move', dir:{ x: id==='left'? -1: id==='right'?1:0, y: id==='up'?1: id==='down'?-1:0 }, speed:1 }); });
-        el.addEventListener('touchend', (e)=>{ e.preventDefault(); send({ type:'move', dir:{ x:0, y:0 }, speed:0 }); });
-    });
-    document.getElementById('action').addEventListener('click', ()=> send({ type:'action', name:'interact' }));
+    ws = new WebSocket(server);
+
+    ws.onopen = () => {
+        log("Connected");
+        ws.send(JSON.stringify({ type:"bind", msg:"controller connected", unityClientId: clientId }));
+    };
+
+    ws.onerror = (e) => {
+        console.error(e);
+        log("Error");
+    };
+
+    ws.onclose = () => {
+        log("Disconnected");
+        clearInterval(heartbeat);
+        clearInterval(sendTimer);
+    };
+
+    // 心跳
+    heartbeat = setInterval(()=>{
+        if(ws.readyState === WebSocket.OPEN)
+            ws.send(JSON.stringify({ type:"ping" }));
+    },10000);
+
+    // 连续发送移动
+    sendTimer = setInterval(()=>{
+        if(ws.readyState === WebSocket.OPEN){
+            ws.send(JSON.stringify({
+                type: "move",
+                dir: { x: dirX, y: dirY },
+                speed: speed
+            }));
+        }
+    }, 50); // 每 50ms 发一次（20 帧）
+};
+
+// -----------------------------------------------
+// action 按钮
+// -----------------------------------------------
+document.getElementById("actionBtn").onclick = ()=>{
+    if(ws && ws.readyState === WebSocket.OPEN){
+        ws.send(JSON.stringify({ type:"action", name:"interact" }));
+    }
+};
+
+// -----------------------------------------------
+// 摇杆控制
+// -----------------------------------------------
+const base = document.getElementById("joystick-base");
+const stick = document.getElementById("joystick-stick");
+const radius = 80; // 摇杆可以移动的最大半径
+let dragging = false;
+
+function handleMove(e){
+    if(!dragging) return;
+
+    const rect = base.getBoundingClientRect();
+    const bx = rect.left + rect.width/2;
+    const by = rect.top + rect.height/2;
+
+    let x = (e.touches ? e.touches[0].clientX : e.clientX) - bx;
+    let y = (e.touches ? e.touches[0].clientY : e.clientY) - by;
+
+    const dist = Math.sqrt(x*x + y*y);
+    const maxDist = radius;
+
+    if(dist > maxDist){
+        x = x * maxDist / dist;
+        y = y * maxDist / dist;
+    }
+
+    stick.style.transform = `translate(${x}px, ${y}px)`;
+
+    // 转换成 0~1 范围
+    dirX = x / maxDist;
+    dirY = -y / maxDist; // y 轴反向
+    speed = Math.min(1, dist / maxDist);
+}
+
+function resetJoystick(){
+    dragging = false;
+    stick.style.transform = "translate(0px, 0px)";
+    dirX = 0;
+    dirY = 0;
+    speed = 0;
+}
+
+base.addEventListener("mousedown", ()=> dragging = true);
+base.addEventListener("touchstart", (e)=>{ e.preventDefault(); dragging = true; });
+
+window.addEventListener("mousemove", handleMove);
+window.addEventListener("touchmove", (e)=>{ e.preventDefault(); handleMove(e); });
+
+window.addEventListener("mouseup", resetJoystick);
+window.addEventListener("touchend", resetJoystick);
 </script>
+
 </body>
 </html>
