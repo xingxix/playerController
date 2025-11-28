@@ -126,15 +126,40 @@ document.getElementById("connect").onclick = () => {
     },10000);
 
     // 连续发送移动
-    sendTimer = setInterval(()=>{
-        if(ws.readyState === WebSocket.OPEN){
-            ws.send(JSON.stringify({
-                type: "move",
-                dir: { x: dirX, y: dirY },
-                speed: speed
-            }));
+let lastDirX = 0;
+let lastDirY = 0;
+
+sendTimer = setInterval(() => {
+    if (ws.readyState === WebSocket.OPEN) {
+
+        // 当前帧有输入
+        if (dirX !== 0 || dirY !== 0) {
+
+            // 只有方向真的变化才发送
+            if (dirX !== lastDirX || dirY !== lastDirY) {
+                ws.send(JSON.stringify({
+                    type: "move",
+                    dir: { x: dirX, y: dirY },
+                    speed: speed
+                }));
+                lastDirX = dirX;
+                lastDirY = dirY;
+            }
+
+        } else {
+            // ⭐ 玩家停止了：只有当上一次不是 0 才发停止包
+            if (lastDirX !== 0 || lastDirY !== 0) {
+                ws.send(JSON.stringify({
+                    type: "move",
+                    dir: { x: 0, y: 0 },
+                    speed: 0
+                }));
+                lastDirX = 0;
+                lastDirY = 0;
+            }
         }
-    }, 50); // 每 50ms 发一次（20 帧）
+    }
+}, 50);
 };
 
 // -----------------------------------------------
