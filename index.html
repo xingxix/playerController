@@ -233,6 +233,7 @@ body > * {
 let ws = null;
 let heartbeat = null;
 let sendTimer = null;
+let inventoryOpen = false;
 let dirX = 0, dirY = 0, speed = 0;
 
 function log(s){
@@ -387,6 +388,7 @@ const radius = 80; // 摇杆可以移动的最大半径
 let dragging = false;
 
 function handleMove(e){
+    if (inventoryOpen) return;
     if(!dragging) return;
 
     const rect = base.getBoundingClientRect();
@@ -487,11 +489,26 @@ const inventory = document.getElementById("inventory");
 const closeBtn = document.getElementById("closeInventory");
 
 backpack.addEventListener("click", () => {
-    inventory.style.display = "flex"; // 打开背包
+    inventory.style.display = "flex";
+    inventoryOpen = true;
+
+    // 强制停止移动
+    dirX = 0;
+    dirY = 0;
+    speed = 0;
+
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+            type: "move",
+            dir: { x: 0, y: 0 },
+            speed: 0
+        }));
+    }
 });
 
 closeBtn.addEventListener("click", () => {
     inventory.style.display = "none"; // 关闭背包
+    inventoryOpen = false;
 });
 
 const inventoryGrid = document.getElementById("inventory-grid");
