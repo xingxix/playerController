@@ -22,8 +22,8 @@ body {
 /* Action 按钮 */
 #actionBtn {
     position: fixed;
-    right: 20px;
-    bottom: 120px;
+    right: 40px;
+    bottom: 100px;
     width: 90px;
     height: 90px;
     border-radius: 50%;
@@ -60,6 +60,125 @@ body {
     background: #00d2ff;
     box-shadow: 0 0 25px rgba(0,210,255,0.8);
 }
+/* 十字方向键整体 */
+#dpad {
+    position: fixed;
+    right: 20px;
+    bottom: 230px;   /* 在 Action 按钮上方 */
+    width: 140px;
+    height: 140px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: 6px;
+    user-select: none;
+    z-index: 10;
+}
+
+/* 单个方向按钮 */
+.dpad-btn {
+    background: rgba(255,255,255,0.18);
+    border: 2px solid rgba(255,255,255,0.35);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    color: #fff;
+    backdrop-filter: blur(6px);
+}
+
+/* 中心空位 */
+.dpad-btn.center {
+    background: transparent;
+    border: none;
+}
+
+/* 方向布局 */
+.dpad-btn.up    { grid-column: 2; grid-row: 1; }
+.dpad-btn.left  { grid-column: 1; grid-row: 2; }
+.dpad-btn.right { grid-column: 3; grid-row: 2; }
+.dpad-btn.down  { grid-column: 2; grid-row: 3; }
+
+/* 按压视觉反馈 */
+.dpad-btn:active {
+    background: rgba(0,210,255,0.5);
+    box-shadow: 0 0 15px rgba(0,210,255,0.8);
+}
+
+#backpack {
+    position: fixed;
+    right: 20px;
+    top: 100px;  /* 顶部下方一点 */
+    width: 60px;  /* 背包大小 */
+    height: 60px;
+    z-index: 20;  /* 高于摇杆和Action按钮 */
+    touch-action: none;  /* 防止触屏滚动 */
+}
+
+#backpack img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain; /* 保持图片比例 */
+}
+/* 背景图层 */
+body::before {
+    content: "";
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: url('image/go.jpg') no-repeat center center fixed;
+    background-size: cover;
+    opacity: 0.1;  /* 背景图透明度 */
+    z-index: 0;      /* 确保在最底层 */
+}
+
+/* 现有控件层 */
+body > * {
+    position: relative;
+    z-index: 1;      /* 保证在背景之上 */
+}
+#inventory {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 320px;
+    height: 400px;
+    background: rgba(0,0,0,0.85);
+    border: 3px solid #fff;
+    border-radius: 12px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    z-index: 30;
+}
+
+#inventory-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 64px);
+    grid-template-rows: repeat(4, 64px);
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.grid-slot {
+    width: 64px;
+    height: 64px;
+    background: url('image/backpackSlot.png') no-repeat center center;
+    background-size: contain;
+    position: relative;
+}
+
+.grid-slot img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
 </style>
 </head>
 <body>
@@ -72,7 +191,13 @@ body {
     <button id="connect">连接</button>
     <span id="st">未连接</span>
 </div>
-
+<div id="dpad">
+    <div class="dpad-btn up">▲</div>
+    <div class="dpad-btn left">◀</div>
+    <div class="dpad-btn center"></div>
+    <div class="dpad-btn right">▶</div>
+    <div class="dpad-btn down">▼</div>
+</div>
 <!-- 摇杆 -->
 <div id="joystick-base">
     <div id="joystick-stick"></div>
@@ -81,6 +206,14 @@ body {
 <!-- Action -->
 <button id="actionBtn">Action</button>
 
+<div id="backpack">
+    <img src="image/backpack.png" alt="背包">
+</div>
+
+<div id="inventory" style="display:none;">
+    <div id="inventory-grid"></div>
+    <img id="closeInventory" src="image/back.png" style="width:50px; height:50px; cursor:pointer;" />
+</div>
 <script>
 let ws = null;
 let heartbeat = null;
@@ -119,6 +252,28 @@ document.getElementById("connect").onclick = () => {
         clearInterval(sendTimer);
     };
 
+    ws.onmessage = (event) => {
+        const msg = event.data;
+        console.log("Received:", msg);
+
+        try {
+            const obj = JSON.parse(msg);
+            if (obj.type === "waiting") {
+                log("Unity 未连接，等待中...");
+            } 
+            else if (obj.type === "item") {
+                // 收到物品消息，添加到背包
+                //记好了，是index！
+                const itemIndex = obj.index;
+                addItemToInventory(itemIndex);
+                //之后把这个改成字吧，跳出来几秒之后消失的那种
+                //绷，什么构式代码，我在这里也要得到物品，在下面还要得到物品，我又传一遍index是何意味
+                log(itemTable[itemIndex].name + "get⭐daze");
+            }
+        } catch (e) {
+            console.error("解析消息失败:", e);
+        }
+    };
     // 心跳
     heartbeat = setInterval(()=>{
         if(ws.readyState === WebSocket.OPEN)
@@ -129,6 +284,7 @@ document.getElementById("connect").onclick = () => {
 let lastDirX = 0;
 let lastDirY = 0;
 
+//这里连续发送，那我十字键肯定不能这么搞
 sendTimer = setInterval(() => {
     if (ws.readyState === WebSocket.OPEN) {
 
@@ -172,6 +328,35 @@ document.getElementById("actionBtn").onclick = ()=>{
 };
 
 // -----------------------------------------------
+// 十字键点击事件（一次性发送 select 消息）
+// -----------------------------------------------
+const dpadBtns = document.querySelectorAll(".dpad-btn");
+dpadBtns.forEach(btn => {
+    //byd哪来的center啊，你不要睁着眼乱说
+    //哦真的有center啊
+    if (btn.classList.contains("center")) return; // 中间空位不处理
+
+    const dirMap = {
+        "up": "up",
+        "down": "down",
+        "left": "left",
+        "right": "right"
+    };
+
+    const dirType = Object.keys(dirMap).find(k => btn.classList.contains(k));
+
+    // 鼠标点击和触屏
+    const sendSelect = () => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: "select", name: dirMap[dirType] }));
+        }
+    };
+
+    btn.addEventListener("mousedown", sendSelect);
+    btn.addEventListener("touchstart", (e) => { e.preventDefault(); sendSelect(); });
+});
+
+// -----------------------------------------------
 // 摇杆控制
 // -----------------------------------------------
 const base = document.getElementById("joystick-base");
@@ -213,6 +398,7 @@ function resetJoystick(){
     speed = 0;
 }
 
+
 base.addEventListener("mousedown", ()=> dragging = true);
 base.addEventListener("touchstart", (e)=>{ e.preventDefault(); dragging = true; });
 
@@ -221,6 +407,119 @@ window.addEventListener("touchmove", (e)=>{ e.preventDefault(); handleMove(e); }
 
 window.addEventListener("mouseup", resetJoystick);
 window.addEventListener("touchend", resetJoystick);
+
+//背包
+//如果在java里，我应该在创建item对象了，可惜js不知道这样好不好总之先差不多搞一个
+const itemTable = {
+    0: {
+        id: "0",
+        name: "白梨",
+        price: 6,
+        img: "image/0.png"
+    },
+    1: {
+        id: "1",
+        name: "鸭梨",
+        price: 6,
+        img: "image/1.png"
+    },
+    2: {
+        id: "2",
+        name: "香蕉",
+        price: 12,
+        img: "image/2.png"
+    },
+    3: {
+        id: "3",
+        name: "橙子",
+        price: 16,
+        img: "image/3.png"
+    },
+    4: {
+        id: "4",
+        name: "腊肉",
+        price: 15,
+        img: "image/4.png"
+    },
+    5: {
+        id: "5",
+        name: "猪肉脯",
+        price: 20,
+        img: "image/5.png"
+    },
+    6: {
+        id: "6",
+        name: "鸡蛋",
+        price: 2,
+        img: "image/6.png"
+    },
+    7: {
+        id: "7",
+        name: "红辣椒",
+        price: 1,
+        img: "image/7.png"
+    }
+};
+const backpack = document.getElementById("backpack");
+const inventory = document.getElementById("inventory");
+const closeBtn = document.getElementById("closeInventory");
+
+backpack.addEventListener("click", () => {
+    inventory.style.display = "flex"; // 打开背包
+});
+
+closeBtn.addEventListener("click", () => {
+    inventory.style.display = "none"; // 关闭背包
+});
+
+const inventoryGrid = document.getElementById("inventory-grid");
+const totalSlots = 16; // 比如 4x4 背包
+const inventorySlots = new Array(totalSlots).fill(null);
+
+for(let i = 0; i < totalSlots; i++){
+    const slot = document.createElement("div");
+    slot.className = "grid-slot";
+    slot.dataset.index = i;
+    inventoryGrid.appendChild(slot);
+}
+function renderInventory() {
+    //这个grid-slot，现在没有，他是后来创建出来的
+    const slots = document.querySelectorAll(".grid-slot");
+
+    slots.forEach((slot, index) => {
+        slot.innerHTML = ""; // 先清空
+
+        const item = inventorySlots[index];
+        if (item) {
+            //创建了图片。。
+            const img = document.createElement("img");
+            img.src = item.img;
+            img.className = "item-icon";
+            slot.appendChild(img);
+        }
+    });
+}
+function addItemToInventory(itemIndex) {
+    const itemData = itemTable[itemIndex];
+    if (!itemData) {
+        console.warn("未知物品:", itemIndex);
+        return;
+    }
+
+    // 找第一个空格子
+    const emptyIndex = inventorySlots.findIndex(slot => slot === null);
+    if (emptyIndex === -1) {
+        console.warn("背包已满");
+        return;
+    }
+
+    // 拷贝一份（避免引用同一个对象）
+    inventorySlots[emptyIndex] = { ...itemData };
+
+    renderInventory();
+
+}
+
 </script>
 
 </body>

@@ -1,0 +1,66 @@
+<!-- 背包界面 -->
+<div id="inventory" style="display:none;">
+    <div id="inventory-grid">
+        <!-- 这里用JS动态生成格子，也可以先写固定的格子 -->
+        <div class="grid-slot" data-index="0"></div>
+        <div class="grid-slot" data-index="1"></div>
+        <div class="grid-slot" data-index="2"></div>
+        <div class="grid-slot" data-index="3"></div>
+        <!-- ...总共 16个格子或更多 -->
+    </div>
+    <button id="closeInventory">返回</button>
+</div>
+
+
+#inventory {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 320px;
+    height: 400px;
+    background: rgba(0,0,0,0.85); /* 半透明黑背景 */
+    border: 3px solid #fff;
+    border-radius: 12px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    z-index: 30; /* 摇杆/Action按钮之上 */
+}
+
+#inventory-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 60px); /* 4列 */
+    grid-template-rows: repeat(4, 60px);   /* 4行 */
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.grid-slot {
+    width: 60px;
+    height: 60px;
+    border: 1px solid #ccc;
+    background: rgba(255,255,255,0.1);
+    border-radius: 6px;
+    position: relative;
+}
+
+.grid-slot img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+//背包
+const backpack = document.getElementById("backpack");
+const inventory = document.getElementById("inventory");
+const closeBtn = document.getElementById("closeInventory");
+
+backpack.addEventListener("click", () => {
+    inventory.style.display = "flex"; // 打开背包
+});
+
+closeBtn.addEventListener("click", () => {
+    inventory.style.display = "none"; // 关闭背包
+});
